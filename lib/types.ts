@@ -54,6 +54,8 @@ export interface Assignment {
   attendantName: string
   quantityAssigned: number
   assignmentType: AssignmentType
+  quantityPerCrate?: number
+  assignedAt: string
 }
 
 export interface SavedCartItem {

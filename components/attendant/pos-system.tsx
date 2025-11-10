@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import type { Product, Sale } from "@/lib/types"
 import { addSale, updateProduct, getCurrentUser, getSavedCartsForUser, saveCartForUser, deleteCartForUser, getProducts, getDraftCartForUser, saveDraftCartForUser, deleteDraftCartForUser } from "@/lib/storage"
+import { useDebounce } from "@/hooks/use-debounce"
 import { useToast } from '@/hooks/use-toast'
 import { formatNaira } from "@/lib/currency"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -171,6 +172,11 @@ export default function POSSystem({ products }: POSSystemProps) {
     }
   }
 
+  // use debounced autosave for drafts
+  const saveDraft = useDebounce((userId: string, draft: any) => {
+    saveDraftCartForUser(userId, draft)
+  }, 800) // 800ms delay
+
   // autosave draft on cart change
   useEffect(() => {
     if (!user || !user.id) return
@@ -179,8 +185,8 @@ export default function POSSystem({ products }: POSSystemProps) {
       currentCartId,
       updatedAt: new Date().toISOString(),
     }
-    saveDraftCartForUser(user.id, draft)
-  }, [cart, currentCartId, user])
+    saveDraft(user.id, draft)
+  }, [cart, currentCartId, user, saveDraft])
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
