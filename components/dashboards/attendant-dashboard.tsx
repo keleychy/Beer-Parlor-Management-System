@@ -24,6 +24,9 @@ export default function AttendantDashboard() {
   const [products, setProducts] = useState<Product[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [period, setPeriod] = useState<string>("all")
+  const [customStart, setCustomStart] = useState("")
+  const [customEnd, setCustomEnd] = useState("")
   const [activeTab, setActiveTab] = useState("pos")
   const user = getCurrentUser()
   const userId = user?.id
@@ -131,27 +134,114 @@ export default function AttendantDashboard() {
               <CardDescription>Products assigned to you by the storekeeper</CardDescription>
             </CardHeader>
             <CardContent>
-              {assignments.length === 0 ? (
-                <p className="text-center text-secondary py-8">No products assigned yet</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {assignments.map((assignment) => (
-                    <div key={assignment.id} className="p-4 border border-border rounded-lg">
-                      <h4 className="font-semibold mb-2">{assignment.productName}</h4>
-                      <div className="space-y-1 text-sm">
-                        <p className="text-secondary">
-                          Quantity: {assignment.quantityAssigned} bottles
-                          {assignment.assignmentType === "crates" &&
-                            ` (${(assignment.quantityAssigned / (assignment.quantityPerCrate || 1)).toFixed(0)} crates)`}
-                        </p>
-                        <p className="text-secondary">
-                          Assigned: {new Date(assignment.assignedAt).toLocaleDateString()}
-                        </p>
-                      </div>
+              <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-secondary">Range:</label>
+                  <select
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                    className="px-2 py-1 border rounded"
+                    title="Select period"
+                    aria-label="Select period"
+                  >
+                    <option value="all">All</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="custom">Custom</option>
+                  </select>
+
+                  {period === "custom" && (
+                    <div className="flex items-center gap-2 ml-2">
+                      <input
+                        type="date"
+                        value={customStart}
+                        onChange={(e) => setCustomStart(e.target.value)}
+                        className="px-2 py-1 border rounded"
+                        title="Start date"
+                        aria-label="Start date"
+                      />
+                      <span className="text-sm">to</span>
+                      <input
+                        type="date"
+                        value={customEnd}
+                        onChange={(e) => setCustomEnd(e.target.value)}
+                        className="px-2 py-1 border rounded"
+                        title="End date"
+                        aria-label="End date"
+                      />
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    className="px-2 py-1 border rounded"
+                    onClick={() => {
+                      setPeriod("all")
+                      setCustomStart("")
+                      setCustomEnd("")
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter and sort assignments based on selected range */}
+              {(() => {
+                const now = new Date()
+                let start: Date | null = null
+                let end: Date | null = null
+                if (period === "daily") {
+                  start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                  end = new Date(start)
+                  end.setDate(end.getDate() + 1)
+                } else if (period === "weekly") {
+                  start = new Date(now)
+                  start.setDate(start.getDate() - 7)
+                  end = new Date(now)
+                } else if (period === "monthly") {
+                  start = new Date(now)
+                  start.setDate(start.getDate() - 30)
+                  end = new Date(now)
+                } else if (period === "custom" && customStart && customEnd) {
+                  start = new Date(customStart)
+                  end = new Date(customEnd)
+                  // include whole end day
+                  end.setDate(end.getDate() + 1)
+                }
+
+                const filtered = assignments
+                  .filter((a) => {
+                    if (!start || !end) return true
+                    const d = new Date(a.assignedAt)
+                    return d >= start && d < end
+                  })
+                  .sort((a, b) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime())
+
+                return filtered.length === 0 ? (
+                  <p className="text-center text-secondary py-8">
+                    {assignments.length > 0 ? "No assignments match the selected filters" : "No products assigned yet"}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {filtered.map((assignment) => (
+                      <div key={assignment.id} className="p-4 border border-border rounded-lg">
+                        <h4 className="font-semibold mb-2">{assignment.productName}</h4>
+                        <div className="space-y-1 text-sm">
+                          <p className="text-secondary">
+                            Quantity: {assignment.quantityAssigned} bottles
+                            {assignment.assignmentType === "crates" &&
+                              ` (${(assignment.quantityAssigned / (assignment.quantityPerCrate || 1)).toFixed(0)} crates)`}
+                          </p>
+                          <p className="text-secondary">Assigned: {new Date(assignment.assignedAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </CardContent>
           </Card>
         </TabsContent>

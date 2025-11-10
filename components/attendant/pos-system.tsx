@@ -8,6 +8,8 @@ import { useToast } from '@/hooks/use-toast'
 import { formatNaira } from "@/lib/currency"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog"
+import { DownloadIcon, Trash2Icon } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
 interface POSSystemProps {
@@ -208,18 +210,41 @@ export default function POSSystem({ products }: POSSystemProps) {
             {user && savedCarts.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-2">
                 {savedCarts.map((sc: any) => (
-                  <div key={sc.id} className="shrink-0 bg-background border border-border rounded px-3 py-2 flex items-center gap-3">
-                    <div className="text-sm">
-                      <div className="font-medium">{sc.name}</div>
-                      <div className="text-xs text-secondary">{sc.items.length} items</div>
+                  <div
+                    key={sc.id}
+                    className="shrink-0 bg-background border border-border rounded px-3 py-2 flex items-center gap-3 min-w-[220px]"
+                    role="group"
+                    aria-label={`Saved cart ${sc.name}`}
+                  >
+                    <div className="text-sm min-w-0 flex-1">
+                      <div className="font-medium truncate leading-tight">{sc.name}</div>
+                      <div className="text-xs text-secondary truncate">{sc.items.length} items</div>
                     </div>
-                    <div className="flex gap-1">
-                      <Button size="xs" variant="outline" onClick={() => loadSavedCart(sc.id)}>
-                        Load
+                    <div className="flex gap-1 items-center">
+                      <Button size="icon" variant="outline" aria-label="Load cart" onClick={() => loadSavedCart(sc.id)}>
+                        <DownloadIcon className="size-4" />
                       </Button>
-                      <Button size="xs" variant="ghost" onClick={() => removeSavedCart(sc.id)}>
-                        Delete
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="icon" variant="ghost" aria-label="Delete cart">
+                            <Trash2Icon className="size-4 text-error" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete saved cart?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently remove this saved cart. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction variant="destructive" onClick={() => removeSavedCart(sc.id)}>
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 ))}
@@ -308,18 +333,36 @@ export default function POSSystem({ products }: POSSystemProps) {
                     <div className="text-xs text-secondary">Saved carts</div>
                     <div className="flex flex-col gap-2">
                       {savedCarts.map((sc: any) => (
-                        <div key={sc.id} className="flex items-center justify-between bg-background border border-border rounded px-2 py-1">
-                          <div className="text-sm">
-                            <div className="font-medium">{sc.name}</div>
-                            <div className="text-xs text-secondary">{new Date(sc.createdAt).toLocaleString()} · {sc.items.length} items</div>
+                        <div key={sc.id} className="flex items-center justify-between bg-background border border-border rounded px-3 py-2 gap-3">
+                          <div className="text-sm min-w-0 flex-1">
+                            <div className="font-medium truncate leading-tight">{sc.name}</div>
+                            <div className="text-xs text-secondary truncate">{new Date(sc.createdAt).toLocaleString()} · {sc.items.length} items</div>
                           </div>
-                          <div className="flex gap-1">
-                            <Button size="sm" variant="outline" onClick={() => loadSavedCart(sc.id)}>
-                              Load
+                          <div className="flex gap-1 items-center">
+                            <Button size="icon" variant="outline" aria-label="Load cart" onClick={() => loadSavedCart(sc.id)}>
+                              <DownloadIcon className="size-4" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => removeSavedCart(sc.id)}>
-                              Delete
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="icon" variant="ghost" aria-label="Delete cart">
+                                  <Trash2Icon className="size-4 text-error" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete saved cart?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently remove this saved cart. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction variant="destructive" onClick={() => removeSavedCart(sc.id)}>
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
                       ))}
@@ -392,13 +435,45 @@ export default function POSSystem({ products }: POSSystemProps) {
                     <span>Total:</span>
                     <span>{formatNaira(totalAmount)}</span>
                   </div>
-                  <Button
-                    onClick={handleCheckout}
-                    size="lg"
-                    className="w-full bg-success hover:bg-success/90 text-primary-foreground"
-                  >
-                    {submitted ? "Completed!" : "Checkout"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="lg"
+                          variant="ghost"
+                          className="flex-1"
+                          disabled={cart.length === 0}
+                        >
+                          Clear Cart
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Clear cart?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will remove all items from your cart. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction variant="destructive" onClick={() => {
+                            setCart([])
+                            if (user) deleteDraftCartForUser(user.id)
+                            setCurrentCartId(null)
+                          }}>
+                            Clear
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    <Button
+                      onClick={handleCheckout}
+                      size="lg"
+                      className="flex-1 bg-success hover:bg-success/90 text-primary-foreground"
+                    >
+                      {submitted ? "Completed!" : "Checkout"}
+                    </Button>
+                  </div>
                 </div>
               </>
             )}

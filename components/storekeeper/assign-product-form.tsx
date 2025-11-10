@@ -9,6 +9,7 @@ import type { Assignment } from "@/lib/types"
 import { formatNaira } from "@/lib/currency"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -298,6 +299,17 @@ export default function AssignProductForm() {
                   </SelectContent>
                 </Select>
                 <Button type="submit" className="flex-1">Assign All to Attendant</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    if (!assignmentCart.length) return
+                    if (!confirm('Clear assignment cart? This will remove all items.')) return
+                    setAssignmentCart([])
+                  }}
+                >
+                  Clear Cart
+                </Button>
               </form>
             </div>
           )}
