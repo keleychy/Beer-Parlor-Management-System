@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import type { Product, Sale } from "@/lib/types"
+import type { Product, Sale, User } from "@/lib/types"
 import { addSale, updateProduct, getCurrentUser, getSavedCartsForUser, saveCartForUser, deleteCartForUser, getProducts, getDraftCartForUser, saveDraftCartForUser, deleteDraftCartForUser } from "@/lib/storage"
 import { useDebounce } from "@/hooks/use-debounce"
 import { useToast } from '@/hooks/use-toast'
@@ -22,7 +22,7 @@ export default function POSSystem({ products }: POSSystemProps) {
   const [submitted, setSubmitted] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
-  const user = getCurrentUser()
+  const [user, setUser] = useState<User | null>(() => getCurrentUser())
   const { toast } = useToast()
 
   const categories = Array.from(new Set(products.map((p) => p.category)))
@@ -59,10 +59,14 @@ export default function POSSystem({ products }: POSSystemProps) {
 
   // load saved carts for the current user
   useEffect(() => {
-    if (user && user.id) {
-      setSavedCarts(getSavedCartsForUser(user.id))
+    // Initialize user and load saved carts/draft on mount or when user changes
+    if (typeof window === 'undefined') return
+    const current = getCurrentUser()
+    setUser(current)
+    if (current && current.id) {
+      setSavedCarts(getSavedCartsForUser(current.id))
       // load draft if available
-      const draft = getDraftCartForUser(user.id)
+      const draft = getDraftCartForUser(current.id)
       if (draft && Array.isArray(draft.items) && draft.items.length > 0) {
         const mapped = draft.items
           .map((it: any) => {
@@ -75,7 +79,9 @@ export default function POSSystem({ products }: POSSystemProps) {
         if (draft.currentCartId) setCurrentCartId(draft.currentCartId)
       }
     }
-  }, [user])
+    // We intentionally only want this to run on mount (and when products change if needed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleCheckout = () => {
     if (cart.length === 0 || !user) return

@@ -537,6 +537,9 @@ function SidebarMenuButton({
       children: tooltip,
     }
   }
+  // Memoize tooltip props so we don't pass a new object each render and trigger
+  // unnecessary re-renders inside Radix primitives.
+  const tooltipProps = React.useMemo(() => (typeof tooltip === 'string' ? { children: tooltip } : tooltip), [tooltip])
 
   return (
     <Tooltip>
@@ -545,7 +548,7 @@ function SidebarMenuButton({
         side="right"
         align="center"
         hidden={state !== 'collapsed' || isMobile}
-        {...tooltip}
+        {...(tooltipProps as any)}
       />
     </Tooltip>
   )
