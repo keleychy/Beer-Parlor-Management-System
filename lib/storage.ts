@@ -14,6 +14,8 @@ const STORAGE_KEYS = {
   PASSWORD_HISTORY: "beer_parlor_password_history"
 }
 
+const STORAGE_VERSION = "2" // Increment this to force data refresh
+
 // Password utility functions
 export async function hashPassword(password: string): Promise<string> {
   if (!password) {
@@ -285,6 +287,22 @@ export async function initializeStorage() {
           id: "3",
           name: "Attendant",
           email: "attendant@distinguishbarsgrills.com",
+          role: "attendant",
+          password: attendantHash,
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: "4",
+          name: "Attendant 2",
+          email: "attendant2@distinguishbarsgrills.com",
+          role: "attendant",
+          password: attendantHash,
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: "5",
+          name: "Attendant 3",
+          email: "attendant3@distinguishbarsgrills.com",
           role: "attendant",
           password: attendantHash,
           createdAt: new Date().toISOString()

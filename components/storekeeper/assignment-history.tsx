@@ -150,7 +150,7 @@ export default function AssignmentHistory() {
               {filtered.length === 0 ? (
                 <p className="text-center text-secondary py-8">
                   {assignments.length > 0
-                    ? "No assignments match the selected filters"
+                    ? "No results for these filters"
                     : "No assignments yet"}
                 </p>
               ) : (
