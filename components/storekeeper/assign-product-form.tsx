@@ -2,8 +2,9 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { getUsers, getProducts, addAssignment, updateProduct } from "@/lib/storage"
+import { useState, useEffect } from "react"
+import { getUsers, getProducts } from "@/lib/storage"
+import api from '@/lib/api'
 import { useToast } from '@/hooks/use-toast'
 import type { Assignment } from "@/lib/types"
 import { formatNaira } from "@/lib/currency"
@@ -26,8 +27,8 @@ export default function AssignProductForm() {
   const [lastAssignments, setLastAssignments] = useState<Assignment[]>([])
   const { toast } = useToast()
 
-  const products = getProducts()
-  const users = getUsers().filter((u) => u.role === "attendant")
+  const [products, setProducts] = useState(() => getProducts())
+  const [users, setUsers] = useState(() => getUsers().filter((u) => u.role === "attendant"))
   const product = products.find((p) => p.id === selectedProduct)
   const attendant = users.find((u) => u.id === selectedAttendant)
 
@@ -84,7 +85,7 @@ export default function AssignProductForm() {
     setAssignmentCart((c) => c.map((it, i) => (i === index ? { ...it, quantity: q } : it)))
   }
 
-  const assignAllToAttendant = (e: React.FormEvent) => {
+  const assignAllToAttendant = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
@@ -105,7 +106,7 @@ export default function AssignProductForm() {
     }
 
     // Final validation: check stock for all items
-    const prodMap = getProducts()
+    const prodMap = await api.fetchProducts().catch(() => getProducts())
     for (const item of assignmentCart) {
       const prod = prodMap.find((p) => p.id === item.productId)
       if (!prod) {
@@ -119,9 +120,9 @@ export default function AssignProductForm() {
       }
     }
 
-    // Perform assignments
+    // Perform assignments (remote-first, fall back to local storage)
     const newAssignments: Assignment[] = [];
-    assignmentCart.forEach((item) => {
+    for (const item of assignmentCart) {
       const units = item.assignmentType === 'crates' ? item.quantity * (item.quantityPerCrate || 1) : item.quantity
       const assignment: Assignment = {
         id: Date.now().toString() + Math.random(),
@@ -134,10 +135,12 @@ export default function AssignProductForm() {
         quantityPerCrate: item.quantityPerCrate,
         assignedAt: new Date().toISOString(),
       }
-      addAssignment(assignment)
-      updateProduct(item.productId, { quantity: (getProducts().find((p) => p.id === item.productId)?.quantity || 0) - units })
+      // Try to add assignment remotely, fallback handled inside api
+      await api.addAssignmentRemote(assignment)
+      // Update product quantity remotely, fallback handled inside api
+      await api.updateProductRemote(item.productId, { quantity: ( (await api.fetchProducts().catch(() => getProducts())).find((p:any)=>p.id===item.productId)?.quantity || 0) - units })
       newAssignments.push(assignment)
-    })
+    }
 
     setLastAssignments(newAssignments)
     setShowPrintDialog(true)
@@ -150,6 +153,18 @@ export default function AssignProductForm() {
 
   const crateEquivalent =
     product && assignmentType === "bottles" ? (Number.parseInt(quantity) / product.quantityPerCrate).toFixed(2) : quantity
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const remote = await api.fetchProducts().catch(() => getProducts())
+      const attendants = await api.fetchAttendants().catch(() => getUsers().filter((u) => u.role === 'attendant'))
+      if (!mounted) return
+      setProducts(remote)
+      setUsers(attendants)
+    })()
+    return () => { mounted = false }
+  }, [])
 
   return (
     <Card>

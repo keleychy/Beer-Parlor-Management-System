@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import api from '@/lib/api'
 import { getProducts, getInventory } from "@/lib/storage"
 import type { Product, Inventory } from "@/lib/types"
 import InventoryManagement from "@/components/storekeeper/inventory-management"
@@ -29,8 +30,14 @@ export default function StorekeeperDashboard() {
   const [activeTab, setActiveTab] = useState("inventory")
 
   useEffect(() => {
-    setProducts(getProducts())
-    setInventory(getInventory())
+    let mounted = true
+    ;(async () => {
+      const remoteProducts = await api.fetchProducts().catch(() => getProducts())
+      if (!mounted) return
+      setProducts(remoteProducts)
+      setInventory(getInventory())
+    })()
+    return () => { mounted = false }
   }, [])
 
   const lowStockCount = products.filter((p) => p.quantity <= p.reorderLevel).length

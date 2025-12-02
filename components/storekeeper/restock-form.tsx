@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import type { Product } from "@/lib/types"
 import { updateProduct, addInventoryLog, getCurrentUser } from "@/lib/storage"
+import api from '@/lib/api'
 
 interface RestockFormProps {
   products: Product[]
@@ -25,7 +26,7 @@ export default function RestockForm({ products }: RestockFormProps) {
     if (!product) return
 
     const newQuantity = product.quantity + Number.parseInt(quantity)
-    updateProduct(selectedProduct, { quantity: newQuantity })
+    await api.updateProductRemote(selectedProduct, { quantity: newQuantity })
 
     if (user) {
       addInventoryLog({

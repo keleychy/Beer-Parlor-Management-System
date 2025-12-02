@@ -2,7 +2,8 @@
 
 import type React from "react"
 import { useState } from "react"
-import { getProducts, addProduct, updateProduct, deleteProduct } from "@/lib/storage"
+import { getProducts } from "@/lib/storage"
+import api from "@/lib/api"
 import type { Product } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -59,7 +60,7 @@ export default function ProductManagement({ onProductsChanged }: { onProductsCha
     setActiveTab("form")
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
@@ -86,13 +87,14 @@ export default function ProductManagement({ onProductsChanged }: { onProductsCha
     }
 
     if (editingId) {
-      updateProduct(editingId, {
+      // remote update (falls back to local storage inside api)
+      await api.updateProductRemote(editingId, {
         name: formData.name,
         category: formData.category,
         quantity,
-        reorderLevel,
-        unitPrice,
-        quantityPerCrate,
+        reorder_level: reorderLevel,
+        unit_price: unitPrice,
+        quantity_per_crate: quantityPerCrate,
       })
     } else {
       const newProduct: Product = {
@@ -105,12 +107,13 @@ export default function ProductManagement({ onProductsChanged }: { onProductsCha
         quantityPerCrate,
         lastRestocked: new Date().toISOString(),
       }
-      addProduct(newProduct)
+      await api.addProductRemote(newProduct)
     }
 
     setSubmitted(true)
-    setTimeout(() => {
-      setProducts(getProducts())
+    setTimeout(async () => {
+      const remote = await api.fetchProducts()
+      setProducts(remote)
       resetForm()
       setSubmitted(false)
       setActiveTab("list")
@@ -119,10 +122,13 @@ export default function ProductManagement({ onProductsChanged }: { onProductsCha
   }
 
   const handleDelete = (id: string) => {
-    deleteProduct(id)
-    setProducts(getProducts())
-    setDeleteConfirm(null)
-    onProductsChanged()
+    ;(async () => {
+      await api.deleteProductRemote(id)
+      const remote = await api.fetchProducts()
+      setProducts(remote)
+      setDeleteConfirm(null)
+      onProductsChanged()
+    })()
   }
 
   return (

@@ -4,6 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import type { Product } from "@/lib/types"
 import { updateProduct, addInventoryLog, getCurrentUser } from "@/lib/storage"
+import api from '@/lib/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -21,7 +22,7 @@ export default function CrateRestockForm({ products }: CrateRestockFormProps) {
   const selectedProd = products.find((p) => p.id === selectedProduct)
   const unitsToAdd = selectedProd ? Number.parseInt(crateQuantity || "0") * selectedProd.quantityPerCrate : 0
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
@@ -45,7 +46,7 @@ export default function CrateRestockForm({ products }: CrateRestockFormProps) {
     const totalUnits = crates * product.quantityPerCrate
     const newQuantity = product.quantity + totalUnits
 
-    updateProduct(selectedProduct, { quantity: newQuantity })
+    await api.updateProductRemote(selectedProduct, { quantity: newQuantity })
 
     if (user) {
       addInventoryLog({

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import type { Product, Sale, User } from "@/lib/types"
-import { addSale, updateProduct, getCurrentUser, getSavedCartsForUser, saveCartForUser, deleteCartForUser, getProducts, getDraftCartForUser, saveDraftCartForUser, deleteDraftCartForUser } from "@/lib/storage"
+import { addSale, updateProduct, getCurrentUser, getSavedCartsForUser, saveCartForUser, deleteCartForUser, getDraftCartForUser, saveDraftCartForUser, deleteDraftCartForUser } from "@/lib/storage"
+import api from "@/lib/api"
 import { useDebounce } from "@/hooks/use-debounce"
 import { useToast } from '@/hooks/use-toast'
 import { formatNaira } from "@/lib/currency"
@@ -16,7 +17,7 @@ interface POSSystemProps {
   products: Product[]
 }
 
-export default function POSSystem({ products }: POSSystemProps) {
+export default function POSSystem({ products: initialProducts }: POSSystemProps) {
   const [cart, setCart] = useState<Array<{ product: Product; quantity: number }>>([])
   const [savedCarts, setSavedCarts] = useState<Array<any>>([])
   const [currentCartId, setCurrentCartId] = useState<string | null>(null)
@@ -26,6 +27,8 @@ export default function POSSystem({ products }: POSSystemProps) {
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [user, setUser] = useState<User | null>(() => getCurrentUser())
   const { toast } = useToast()
+
+  const [products, setProducts] = useState<Product[]>(initialProducts || [])
 
   const categories = Array.from(new Set(products.map((p) => p.category)))
   const filteredProducts = products
@@ -85,11 +88,27 @@ export default function POSSystem({ products }: POSSystemProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const remote = await api.fetchProducts()
+      if (!mounted) return
+      setProducts(remote)
+    })()
+    return () => { mounted = false }
+  }, [])
+
   const handleCheckout = () => {
     if (cart.length === 0 || !user) return
 
-    // Final stock validation: re-read products and ensure sufficient stock
-    const latest = getProducts()
+    // Final stock validation: re-read products from remote/local and ensure sufficient stock
+    const latest = await (async () => {
+      try {
+        return await api.fetchProducts()
+      } catch (err) {
+        return getProducts()
+      }
+    })()
     const problems: string[] = []
     cart.forEach((item) => {
       const p = latest.find((x) => x.id === item.product.id)
@@ -104,9 +123,10 @@ export default function POSSystem({ products }: POSSystemProps) {
       return
     }
 
-    cart.forEach((item) => {
+    for (const item of cart) {
       const newQuantity = item.product.quantity - item.quantity
-      updateProduct(item.product.id, { quantity: newQuantity })
+      // update remote (falls back to local)
+      await api.updateProductRemote(item.product.id, { quantity: newQuantity })
 
       const sale: Sale = {
         id: Date.now().toString() + Math.random(),
@@ -119,8 +139,8 @@ export default function POSSystem({ products }: POSSystemProps) {
         attendantName: user.name,
         timestamp: new Date().toISOString(),
       }
-      addSale(sale)
-    })
+      await api.addSaleRemote(sale)
+    }
 
     setSubmitted(true)
     setCart([])

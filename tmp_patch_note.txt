@@ -1,0 +1,9 @@
+Applying batch patches to convert UI components to use lib/api: 
+- components/admin/add-product-form.tsx
+- components/storekeeper/crate-restock-form.tsx
+- components/storekeeper/restock-form.tsx
+- components/dashboards/admin-dashboard.tsx
+- components/dashboards/attendant-dashboard.tsx
+- components/dashboards/storekeeper-dashboard.tsx
+
+I'll update imports, switch to remote-first helpers, and keep localStorage fallbacks where appropriate.

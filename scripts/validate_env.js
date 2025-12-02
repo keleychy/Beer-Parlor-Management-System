@@ -24,6 +24,7 @@ async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const internalKey = process.env.INTERNAL_API_KEY;
 
   let hadError = false;
 
@@ -46,6 +47,10 @@ async function main() {
 
   if (!serviceKey) {
     console.warn('`SUPABASE_SERVICE_ROLE_KEY` is not set — seeding and admin ops will be skipped.');
+  }
+
+  if (!internalKey) {
+    console.warn('`INTERNAL_API_KEY` is not set — local API endpoints will require this for protection.');
   }
 
   if (hadError) {

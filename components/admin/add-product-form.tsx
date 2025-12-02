@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { addProduct } from "@/lib/storage"
+import api from '@/lib/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -26,7 +26,7 @@ export default function AddProductForm({ onProductAdded }: { onProductAdded: () 
     }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
@@ -63,7 +63,7 @@ export default function AddProductForm({ onProductAdded }: { onProductAdded: () 
       lastRestocked: new Date().toISOString(),
     }
 
-    addProduct(newProduct)
+    await api.addProductRemote(newProduct)
 
     setSubmitted(true)
     setTimeout(() => {

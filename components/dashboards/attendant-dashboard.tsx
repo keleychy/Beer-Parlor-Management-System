@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import api from '@/lib/api'
 import { getProducts, getSales, getCurrentUser, getAssignmentsByAttendant } from "@/lib/storage"
 import type { Product, Sale, Assignment } from "@/lib/types"
 import POSSystem from "@/components/attendant/pos-system"
@@ -32,11 +33,17 @@ export default function AttendantDashboard() {
   const userId = user?.id
 
   useEffect(() => {
-    setProducts(getProducts())
-    setSales(getSales())
-    if (userId) {
-      setAssignments(getAssignmentsByAttendant(userId))
-    }
+    let mounted = true
+    ;(async () => {
+      const remoteProducts = await api.fetchProducts().catch(() => getProducts())
+      const remoteSales = await api.fetchSales().catch(() => getSales())
+      const remoteAssignments = await api.fetchAssignments().catch(() => (userId ? getAssignmentsByAttendant(userId) : []))
+      if (!mounted) return
+      setProducts(remoteProducts)
+      setSales(remoteSales)
+      if (userId) setAssignments(remoteAssignments.filter((a:any) => a.attendantId === userId))
+    })()
+    return () => { mounted = false }
   }, [userId])
 
   const userSales = sales.filter((s) => s.attendantId === user?.id)

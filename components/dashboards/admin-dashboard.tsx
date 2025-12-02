@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import api from '@/lib/api'
 import { getProducts, getUsers, getSales, getInventory } from "@/lib/storage"
 import type { Product, User, Sale, Inventory } from "@/lib/types"
 import UserManagement from "@/components/admin/user-management"
@@ -30,10 +31,17 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
 
   useEffect(() => {
-    setProducts(getProducts())
-    setUsers(getUsers())
-    setSales(getSales())
-    setInventory(getInventory())
+    let mounted = true
+    ;(async () => {
+      const remoteProducts = await api.fetchProducts().catch(() => getProducts())
+      const remoteSales = await api.fetchSales().catch(() => getSales())
+      if (!mounted) return
+      setProducts(remoteProducts)
+      setUsers(getUsers())
+      setSales(remoteSales)
+      setInventory(getInventory())
+    })()
+    return () => { mounted = false }
   }, [])
 
   const handleProductAdded = () => {

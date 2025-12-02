@@ -3,11 +3,23 @@
 import type { Sale } from "@/lib/types"
 import { formatNaira } from "@/lib/currency"
 
-interface SalesHistoryProps {
-  sales: Sale[]
-}
+import { useEffect, useState } from 'react'
+import api from '@/lib/api'
+import { getSales } from '@/lib/storage'
 
-export default function SalesHistory({ sales }: SalesHistoryProps) {
+export default function SalesHistory() {
+  const [sales, setSales] = useState<Sale[]>(() => getSales())
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const remote = await api.fetchSales()
+      if (!mounted) return
+      setSales(remote)
+    })()
+    return () => { mounted = false }
+  }, [])
+
   const totalRevenue = sales.reduce((sum, sale) => sum + sale.totalPrice, 0)
 
   return (

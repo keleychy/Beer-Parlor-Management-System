@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { Product } from "@/lib/types"
 import { updateProduct } from "@/lib/storage"
+import api from "@/lib/api"
 import { formatNaira } from "@/lib/currency"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,11 +13,23 @@ interface InventoryManagementProps {
   products: Product[]
 }
 
-export default function InventoryManagement({ products }: InventoryManagementProps) {
-  const [lowStockProducts, setLowStockProducts] = useState(products.filter((p) => p.quantity <= p.reorderLevel))
+export default function InventoryManagement({ products: initialProducts }: InventoryManagementProps) {
+  const [products, setProducts] = useState<Product[]>(initialProducts || [])
+  const [lowStockProducts, setLowStockProducts] = useState(() => (initialProducts || []).filter((p) => p.quantity <= p.reorderLevel))
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<Partial<Product>>({})
   const [searchTerm, setSearchTerm] = useState("")
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const remote = await api.fetchProducts()
+      if (!mounted) return
+      setProducts(remote)
+      setLowStockProducts(remote.filter((p: Product) => p.quantity <= p.reorderLevel))
+    })()
+    return () => { mounted = false }
+  }, [])
 
   const filteredProducts = products.filter(
     (p) =>
@@ -29,11 +42,12 @@ export default function InventoryManagement({ products }: InventoryManagementPro
     setEditValues(product)
   }
 
-  const handleSave = (productId: string) => {
+  const handleSave = async (productId: string) => {
     if (editValues.reorderLevel !== undefined) {
-      updateProduct(productId, {
-        reorderLevel: editValues.reorderLevel,
-      })
+      // Update remote (falls back to local storage inside api)
+      await api.updateProductRemote(productId, { reorder_level: editValues.reorderLevel })
+      // Optimistically update UI
+      setProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, reorderLevel: editValues.reorderLevel } : p)))
     }
     setEditingId(null)
     setEditValues({})

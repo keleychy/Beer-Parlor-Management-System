@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { getAssignments, removeAssignment, getUsers } from "@/lib/storage"
+import { fetchAssignments, removeAssignmentRemote, fetchAttendants } from "@/lib/api"
 import type { Assignment, User } from "@/lib/types"
 import { formatNaira } from "@/lib/currency"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,14 +19,24 @@ export default function AssignmentHistory() {
   const [customEnd, setCustomEnd] = useState<string>('')
 
   useEffect(() => {
-    setAssignments(getAssignments())
-    const users = getUsers()
-    setAttendants(users.filter((u) => u.role === 'attendant'))
+    let mounted = true
+    ;(async () => {
+      const a = await fetchAssignments()
+      if (!mounted) return
+      setAssignments(a)
+      const at = await fetchAttendants()
+      if (!mounted) return
+      setAttendants(at)
+    })()
+    return () => { mounted = false }
   }, [])
 
-  const handleRemove = (id: string) => {
-    removeAssignment(id)
-    setAssignments(getAssignments())
+  const handleRemove = async (id: string) => {
+    if (!id) return
+    await removeAssignmentRemote(id)
+    // refresh local list
+    const a = await fetchAssignments()
+    setAssignments(a)
   }
 
   const clearFilters = () => {

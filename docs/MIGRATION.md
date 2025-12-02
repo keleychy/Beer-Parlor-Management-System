@@ -26,6 +26,25 @@ $env:DATABASE_URL="postgres://<db_user>:<db_pass>@<host>:<port>/<db_name>"
 pnpm run migrate
 # or
 npm run migrate
+
+Before running migrations, you can validate your environment with the included check:
+
+```powershell
+pnpm run check-env
+# or
+npm run check-env
+```
+
+Alternatively, use the included PowerShell helper which will prompt for any missing values, validate the environment, run migrations, and optionally run the seed:
+
+```powershell
+# Interactive: will prompt for missing env vars
+.\n+\scripts\run_migrations.ps1
+
+# With explicit seeding (will run seed if you provide the service key or pass -Seed)
+.
+\scripts\run_migrations.ps1 -Seed
+```
 ```
 
 3) Seed (creates Auth users and sample products)
@@ -67,6 +86,7 @@ You can trigger the built-in workflow `Supabase Migrations` from the Actions tab
 - `DATABASE_URL` (your Supabase Postgres connection string)
 - `NEXT_PUBLIC_SUPABASE_URL` (Supabase project URL)
 - `SUPABASE_SERVICE_ROLE_KEY` (service role key)
+ - `INTERNAL_API_KEY` (secret used by internal API routes to protect server endpoints)
 
 The workflow will run `npm run migrate` and, if secrets are present, `npm run seed`.
 
