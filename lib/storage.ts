@@ -1,5 +1,6 @@
 import type { User, Product, Sale, Inventory, Assignment } from "./types"
 import bcrypt from "bcryptjs"
+import supabase from './supabase'
 
 const STORAGE_KEYS = {
   USERS: "beer_parlor_users",
@@ -233,6 +234,72 @@ export async function changePassword(userId: string, currentPassword: string, ne
   return { success: true };
 }
 
+/* ---------- Helpers to map DB rows (snake_case) to app types (camelCase) ---------- */
+function dbProductToApp(p: any): Product {
+  return {
+    id: p.id,
+    name: p.name,
+    category: p.category || '',
+    quantity: p.quantity || 0,
+    reorderLevel: p.reorder_level || 0,
+    unitPrice: p.unit_price || 0,
+    quantityPerCrate: p.quantity_per_crate || 1,
+    lastRestocked: p.last_restocked || new Date().toISOString(),
+  }
+}
+
+function appProductToDb(p: Product) {
+  return {
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    quantity: p.quantity,
+    reorder_level: p.reorderLevel,
+    unit_price: p.unitPrice,
+    quantity_per_crate: p.quantityPerCrate,
+    last_restocked: p.lastRestocked,
+  }
+}
+
+function dbUserToApp(u: any): User {
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    password: u.password || '',
+    createdAt: u.created_at || new Date().toISOString(),
+    status: u.status || 'active'
+  }
+}
+
+/* Async sync helpers (fire-and-forget) update localStorage from Supabase where possible */
+async function syncProductsFromSupabase() {
+  if (typeof window === 'undefined') return
+  try {
+    const { data, error } = await supabase.from('products').select('*')
+    if (!error && Array.isArray(data)) {
+      const mapped = data.map(dbProductToApp)
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(mapped))
+    }
+  } catch (err) {
+    console.debug('Supabase products sync failed', err)
+  }
+}
+
+async function syncUsersFromSupabase() {
+  if (typeof window === 'undefined') return
+  try {
+    const { data, error } = await supabase.from('users').select('*')
+    if (!error && Array.isArray(data)) {
+      const mapped = data.map(dbUserToApp)
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(mapped))
+    }
+  } catch (err) {
+    console.debug('Supabase users sync failed', err)
+  }
+}
+
 // Initialize default data
 export async function initializeStorage() {
   // Ensure existing users have a status field; migrate if missing
@@ -402,6 +469,8 @@ export async function initializeStorage() {
 export function getUsers(): User[] {
   if (typeof window === "undefined") return []
   const data = localStorage.getItem(STORAGE_KEYS.USERS)
+  // Start background sync from Supabase; return local copy immediately
+  syncUsersFromSupabase()
   return data ? JSON.parse(data) : []
 }
 
@@ -439,6 +508,16 @@ export async function addUser(user: Partial<User> & { password: string }) {
   users.push(newUser)
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users))
   logActivity(newUser.id, 'USER_CREATE', `User ${newUser.email} created`)
+
+  // Try to insert into Supabase (best-effort; will fail if not allowed)
+  (async () => {
+    try {
+      const { error } = await supabase.from('users').insert([{ id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role, status: newUser.status, created_at: newUser.createdAt }])
+      if (error) console.debug('Supabase addUser failed', error.message)
+    } catch (err) {
+      console.debug('Supabase addUser error', err)
+    }
+  })()
 }
 
 export async function updateUser(id: string, updates: Partial<User>) {
@@ -457,6 +536,23 @@ export async function updateUser(id: string, updates: Partial<User>) {
   users[idx] = { ...users[idx], ...updates, status: updates.status || users[idx].status || 'active' }
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users))
   logActivity(id, 'USER_UPDATE', `User ${users[idx].email} updated`)
+
+  // Best-effort update Supabase
+  (async () => {
+    try {
+      const dbRow: any = {}
+      if (updates.name) dbRow.name = updates.name
+      if (updates.email) dbRow.email = updates.email
+      if (updates.role) dbRow.role = updates.role
+      if (updates.status) dbRow.status = updates.status
+      if (Object.keys(dbRow).length > 0) {
+        const { error } = await supabase.from('users').update(dbRow).eq('id', id)
+        if (error) console.debug('Supabase updateUser failed', error.message)
+      }
+    } catch (err) {
+      console.debug('Supabase updateUser error', err)
+    }
+  })()
 }
 
 /**
@@ -517,6 +613,15 @@ export function deleteUser(id: string) {
   const filtered = users.filter(u => u.id !== id)
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(filtered))
   logActivity(id, 'USER_DELETE', `User ${id} deleted`)
+
+  ;(async () => {
+    try {
+      const { error } = await supabase.from('users').delete().eq('id', id)
+      if (error) console.debug('Supabase deleteUser failed', error.message)
+    } catch (err) {
+      console.debug('Supabase deleteUser error', err)
+    }
+  })()
 }
 
 export function setUserStatus(id: string, status: 'active' | 'suspended' | 'frozen') {
@@ -614,6 +719,8 @@ export function setCurrentUser(user: User | null) {
 export function getProducts(): Product[] {
   if (typeof window === "undefined") return []
   const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS)
+  // Kick off a background sync from Supabase, then return local data immediately
+  syncProductsFromSupabase()
   return data ? JSON.parse(data) : []
 }
 
@@ -622,6 +729,17 @@ export function addProduct(product: Product) {
   const products = getProducts()
   products.push(product)
   localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products))
+
+  // Try to persist to Supabase (best-effort)
+  (async () => {
+    try {
+      const dbRow = appProductToDb(product)
+      const { error } = await supabase.from('products').insert([dbRow])
+      if (error) console.debug('Supabase addProduct failed', error.message)
+    } catch (err) {
+      console.debug('Supabase addProduct error', err)
+    }
+  })()
 }
 
 export function updateProduct(id: string, updates: Partial<Product>) {
@@ -631,6 +749,24 @@ export function updateProduct(id: string, updates: Partial<Product>) {
   if (index !== -1) {
     products[index] = { ...products[index], ...updates }
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products))
+    ;(async () => {
+      try {
+        const dbUpd: any = {}
+        if (updates.name) dbUpd.name = updates.name
+        if (updates.category) dbUpd.category = updates.category
+        if (typeof updates.quantity === 'number') dbUpd.quantity = updates.quantity
+        if (typeof updates.reorderLevel === 'number') dbUpd.reorder_level = updates.reorderLevel
+        if (typeof updates.unitPrice === 'number') dbUpd.unit_price = updates.unitPrice
+        if (typeof updates.quantityPerCrate === 'number') dbUpd.quantity_per_crate = updates.quantityPerCrate
+        if (updates.lastRestocked) dbUpd.last_restocked = updates.lastRestocked
+        if (Object.keys(dbUpd).length > 0) {
+          const { error } = await supabase.from('products').update(dbUpd).eq('id', id)
+          if (error) console.debug('Supabase updateProduct failed', error.message)
+        }
+      } catch (err) {
+        console.debug('Supabase updateProduct error', err)
+      }
+    })()
   }
 }
 
@@ -639,12 +775,43 @@ export function deleteProduct(id: string) {
   const products = getProducts()
   const filtered = products.filter((p) => p.id !== id)
   localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(filtered))
+  ;(async () => {
+    try {
+      const { error } = await supabase.from('products').delete().eq('id', id)
+      if (error) console.debug('Supabase deleteProduct failed', error.message)
+    } catch (err) {
+      console.debug('Supabase deleteProduct error', err)
+    }
+  })()
 }
 
 // Sales operations
 export function getSales(): Sale[] {
   if (typeof window === "undefined") return []
   const data = localStorage.getItem(STORAGE_KEYS.SALES)
+  // Best-effort: attempt to sync from Supabase, but return local copy synchronously
+  (async () => {
+    try {
+      const { data, error } = await supabase.from('sales').select('*')
+      if (!error && Array.isArray(data)) {
+        // Map DB rows to app Sale shape minimally
+        const mapped = data.map((r: any) => ({
+          id: r.id,
+          productId: r.product_id,
+          productName: r.product_name,
+          quantity: r.quantity,
+          unitPrice: r.unit_price,
+          totalPrice: r.total_price,
+          attendantId: r.attendant_id,
+          attendantName: r.attendant_name,
+          timestamp: r.created_at
+        }))
+        localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(mapped))
+      }
+    } catch (err) {
+      console.debug('Supabase getSales failed', err)
+    }
+  })()
   return data ? JSON.parse(data) : []
 }
 
@@ -653,12 +820,53 @@ export function addSale(sale: Sale) {
   const sales = getSales()
   sales.push(sale)
   localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales))
+
+  ;(async () => {
+    try {
+      const row = {
+        id: sale.id,
+        product_id: sale.productId,
+        product_name: sale.productName,
+        quantity: sale.quantity,
+        unit_price: sale.unitPrice,
+        total_price: sale.totalPrice,
+        attendant_id: sale.attendantId,
+        attendant_name: sale.attendantName,
+        created_at: sale.timestamp
+      }
+      const { error } = await supabase.from('sales').insert([row])
+      if (error) console.debug('Supabase addSale failed', error.message)
+    } catch (err) {
+      console.debug('Supabase addSale error', err)
+    }
+  })()
 }
 
 // Inventory operations
 export function getInventory(): Inventory[] {
   if (typeof window === "undefined") return []
   const data = localStorage.getItem(STORAGE_KEYS.INVENTORY)
+  // Try to refresh from Supabase in background
+  (async () => {
+    try {
+      const { data, error } = await supabase.from('inventory').select('*')
+      if (!error && Array.isArray(data)) {
+        const mapped = data.map((r: any) => ({
+          id: r.id,
+          productId: r.product_id,
+          productName: r.product_name,
+          quantityIn: r.quantity_in,
+          quantityOut: r.quantity_out,
+          reason: r.reason,
+          timestamp: r.created_at,
+          userId: r.user_id
+        }))
+        localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(mapped))
+      }
+    } catch (err) {
+      console.debug('Supabase getInventory failed', err)
+    }
+  })()
   return data ? JSON.parse(data) : []
 }
 
@@ -667,11 +875,52 @@ export function addInventoryLog(log: Inventory) {
   const inventory = getInventory()
   inventory.push(log)
   localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inventory))
+
+  ;(async () => {
+    try {
+      const row = {
+        id: log.id,
+        product_id: log.productId,
+        product_name: log.productName,
+        quantity_in: log.quantityIn,
+        quantity_out: log.quantityOut,
+        reason: log.reason,
+        created_at: log.timestamp,
+        user_id: log.userId
+      }
+      const { error } = await supabase.from('inventory').insert([row])
+      if (error) console.debug('Supabase addInventoryLog failed', error.message)
+    } catch (err) {
+      console.debug('Supabase addInventoryLog error', err)
+    }
+  })()
 }
 
 export function getAssignments(): Assignment[] {
   if (typeof window === "undefined") return []
   const data = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS)
+  // Background sync from Supabase
+  (async () => {
+    try {
+      const { data, error } = await supabase.from('assignments').select('*')
+      if (!error && Array.isArray(data)) {
+        const mapped = data.map((r: any) => ({
+          id: r.id,
+          productId: r.product_id,
+          productName: r.product_name,
+          attendantId: r.attendant_id,
+          attendantName: r.attendant_name,
+          quantityAssigned: r.quantity_assigned,
+          assignmentType: r.assignment_type,
+          quantityPerCrate: r.quantity_per_crate,
+          assignedAt: r.assigned_at
+        }))
+        localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(mapped))
+      }
+    } catch (err) {
+      console.debug('Supabase getAssignments failed', err)
+    }
+  })()
   return data ? JSON.parse(data) : []
 }
 
@@ -685,6 +934,26 @@ export function addAssignment(assignment: Assignment) {
   const assignments = getAssignments()
   assignments.push(assignment)
   localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments))
+
+  ;(async () => {
+    try {
+      const row = {
+        id: assignment.id,
+        product_id: assignment.productId,
+        product_name: assignment.productName,
+        attendant_id: assignment.attendantId,
+        attendant_name: assignment.attendantName,
+        quantity_assigned: assignment.quantityAssigned,
+        assignment_type: assignment.assignmentType,
+        quantity_per_crate: assignment.quantityPerCrate,
+        assigned_at: assignment.assignedAt
+      }
+      const { error } = await supabase.from('assignments').insert([row])
+      if (error) console.debug('Supabase addAssignment failed', error.message)
+    } catch (err) {
+      console.debug('Supabase addAssignment error', err)
+    }
+  })()
 }
 
 export function removeAssignment(id: string) {
@@ -692,6 +961,14 @@ export function removeAssignment(id: string) {
   const assignments = getAssignments()
   const filtered = assignments.filter((a) => a.id !== id)
   localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(filtered))
+  ;(async () => {
+    try {
+      const { error } = await supabase.from('assignments').delete().eq('id', id)
+      if (error) console.debug('Supabase removeAssignment failed', error.message)
+    } catch (err) {
+      console.debug('Supabase removeAssignment error', err)
+    }
+  })()
 }
 
 export function updateAssignment(id: string, updates: Partial<Assignment>) {
@@ -701,6 +978,23 @@ export function updateAssignment(id: string, updates: Partial<Assignment>) {
   if (index !== -1) {
     assignments[index] = { ...assignments[index], ...updates }
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments))
+    ;(async () => {
+      try {
+        const dbUpd: any = {}
+        if (updates.productName) dbUpd.product_name = updates.productName
+        if (updates.attendantName) dbUpd.attendant_name = updates.attendantName
+        if (typeof updates.quantityAssigned === 'number') dbUpd.quantity_assigned = updates.quantityAssigned
+        if (updates.assignmentType) dbUpd.assignment_type = updates.assignmentType
+        if (typeof updates.quantityPerCrate === 'number') dbUpd.quantity_per_crate = updates.quantityPerCrate
+        if (updates.assignedAt) dbUpd.assigned_at = updates.assignedAt
+        if (Object.keys(dbUpd).length > 0) {
+          const { error } = await supabase.from('assignments').update(dbUpd).eq('id', id)
+          if (error) console.debug('Supabase updateAssignment failed', error.message)
+        }
+      } catch (err) {
+        console.debug('Supabase updateAssignment error', err)
+      }
+    })()
   }
 }
 

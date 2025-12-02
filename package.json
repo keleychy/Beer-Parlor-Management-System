@@ -5,6 +5,9 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "migrate": "node ./scripts/migrate.js",
+    "check-env": "node ./scripts/validate_env.js",
+    "seed": "node ./scripts/seed.js",
     "lint": "echo \"Skipping lint (ESLint needs configuration). Run 'pnpm setup:eslint' to configure.\"",
     "start": "next start",
     "test": "vitest",
@@ -12,6 +15,9 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.76.1",
+    "pg": "^8.11.0",
+    "dotenv": "^16.0.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
